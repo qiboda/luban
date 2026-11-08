@@ -24,7 +24,8 @@ bitflags::bitflags!{
     }
 }
 {{~else~}}
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, atom_datatables::serde::Deserialize)]
+#[serde(crate = "atom_datatables::serde", from = "i32")]
 pub enum {{enum.name}} {
     {{~ for item in enum.items ~}}
 {{~if item.comment_or_alias != '' ~}}
@@ -56,11 +57,15 @@ impl From<i32> for {{enum.name}} {
 {{~ if bean.is_abstract_type || bean.parent != '' ~}}
 compile_error!("rust-bevy 目标暂不支持多态 bean（抽象 / 继承）：{{bean.name}}");
 {{~ else ~}}
-#[derive(Debug)]
+#[derive(Debug, atom_datatables::serde::Deserialize)]
+#[serde(crate = "atom_datatables::serde")]
 pub struct {{bean.name}} {
     {{~ for field in hierarchy_fields ~}}
 {{~if field.comment != '' ~}}
     /// {{escape_comment field.comment}}
+{{~end~}}
+{{~if need_marshal_bool_prefix field.ctype ~}}
+    #[serde(default)]
 {{~end~}}
     pub {{field.name}}: {{declaring_type_name field.ctype}},
     {{~end~}}
@@ -82,13 +87,10 @@ impl {{bean.name}}{
 {{~end~}}
 {{~ for table in __mod.tables
     key_type = declaring_type_name table.key_ttype
-    if table.value_ttype.def_bean.is_abstract_type
-        value_type = declaring_type_name table.value_ttype
-    else
-        value_type = "std::sync::Arc<"+declaring_type_name table.value_ttype+">"
-    end
-    name = table.name    
-    map_type = "std::collections::HashMap<"+key_type+", "+value_type+">"
+    value_type = declaring_type_name table.value_ttype
+    value_arc = "std::sync::Arc<" + value_type + ">"
+    name = table.name
+    map_type = "std::collections::HashMap<" + key_type + ", " + value_arc + ">"
 ~}}
 {{
     
@@ -97,7 +99,7 @@ impl {{bean.name}}{
     end
     
     func table_union_map_type_name
-        ret 'std::collections::HashMap<(' + (array.each table.index_list @index_type_name | array.join ', ') + '), ' + value_type  + '>'
+        ret 'std::collections::HashMap<(' + (array.each table.index_list @index_type_name | array.join ', ') + '), ' + value_arc  + '>'
     end
     
     func table_key_list
@@ -122,43 +124,45 @@ impl {{bean.name}}{
 #[derive(Debug)]
 pub struct {{table.name}} {
     {{~if table.is_map_table ~}}
-    pub data_list: Vec<{{value_type}}>,
+    pub data_list: Vec<{{value_arc}}>,
     pub data_map: {{map_type}},
     {{~else if table.is_list_table ~}}
-    pub data_list: Vec<{{value_type}}>,
+    pub data_list: Vec<{{value_arc}}>,
     {{~if table.is_union_index~}}    
     pub data_map_union: {{table_union_map_type_name}},
     {{~else if !table.index_list.empty?~}}
     {{~for idx in table.index_list~}}
-    pub data_map_{{idx.index_field.name}}: std::collections::HashMap<{{declaring_type_name idx.type}}, {{value_type}}>,
+    pub data_map_{{idx.index_field.name}}: std::collections::HashMap<{{declaring_type_name idx.type}}, {{value_arc}}>,
     {{~end~}}
     {{~end~}}    
     {{~else~}}
-    pub data: {{declaring_type_name table.value_ttype}},
+    pub data: {{value_type}},
     {{~end~}}
 }
 {{~if table.is_map_table ~}}
 
 impl {{name}} {
-    pub fn new(buf: &mut ByteBuf) -> Result<std::sync::Arc<{{name}}>, LubanError> {
+    /// 由已解析的记录构建表：`bin` 与 `json` 两条解析路径共用这里的索引构建逻辑。
+    pub fn from_rows(rows: Vec<{{value_type}}>) -> Result<std::sync::Arc<{{name}}>, LubanError> {
         let mut data_map: {{map_type}} = Default::default();
-        let mut data_list: Vec<{{value_type}}> = vec![];
-
-        for _ in (0..buf.read_size()).rev() {
-            {{deserialize_row "row" "buf" table.value_ttype}}
+        let mut data_list: Vec<{{value_arc}}> = Vec::with_capacity(rows.len());
+        for row in rows {
+            let row = std::sync::Arc::new(row);
             data_list.push(row.clone());
-            {{~ if table.value_ttype.def_bean.is_abstract_type ~}}
-            let key = <AbstractBase as GetBase<&dyn {{base_trait_name table.value_ttype.def_bean}}>>::get_base(std::ops::Deref::deref(&row))?;
-            data_map.insert(key.{{getter_name table.index_field.name}}().clone(), row.clone());
-            {{~else~}}
             data_map.insert(row.{{table.index_field.name}}.clone(), row.clone());
-            {{~end~}}
         }
-
         Ok(std::sync::Arc::new({{name}} { data_map, data_list }))
     }
 
-    pub fn get<Q>(&self, key: &Q) -> Option<{{value_type}}>
+    pub fn new(buf: &mut ByteBuf) -> Result<std::sync::Arc<{{name}}>, LubanError> {
+        let mut rows: Vec<{{value_type}}> = Vec::new();
+        for _ in 0..buf.read_size() {
+            rows.push({{value_type}}::new(buf)?);
+        }
+        Self::from_rows(rows)
+    }
+
+    pub fn get<Q>(&self, key: &Q) -> Option<{{value_arc}}>
     where
         {{key_type}}: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
@@ -172,7 +176,7 @@ where
     {{key_type}}: std::borrow::Borrow<Q>,
     Q: std::hash::Hash + Eq + ?Sized,
 {
-    type Output = {{value_type}};
+    type Output = {{value_arc}};
 
     fn index(&self, index: &Q) -> &Self::Output {
         self.data_map.get(index).unwrap()
@@ -181,12 +185,10 @@ where
 {{~else if table.is_list_table ~}}
 
 impl {{name}} {
-    pub fn new(buf: &mut ByteBuf) -> Result<std::sync::Arc<{{name}}>, LubanError> {
-        let mut data_list: Vec<{{value_type}}> = vec![];
-
-        for _ in (0..buf.read_size()).rev() {
-            {{deserialize_row "row" "buf" table.value_ttype}}
-            data_list.push(row.clone());
+    pub fn from_rows(rows: Vec<{{value_type}}>) -> Result<std::sync::Arc<{{name}}>, LubanError> {
+        let mut data_list: Vec<{{value_arc}}> = Vec::with_capacity(rows.len());
+        for row in rows {
+            data_list.push(std::sync::Arc::new(row));
         }
     {{~if table.is_union_index~}}
         let mut data_map_union: {{table_union_map_type_name}} = Default::default();
@@ -195,7 +197,7 @@ impl {{name}} {
         }
     {{~else if !table.index_list.empty?~}}
         {{~for idx in table.index_list~}}
-        let mut data_map_{{idx.index_field.name}}: std::collections::HashMap<{{declaring_type_name idx.index_field.ctype}}, {{value_type}}> = Default::default();
+        let mut data_map_{{idx.index_field.name}}: std::collections::HashMap<{{declaring_type_name idx.index_field.ctype}}, {{value_arc}}> = Default::default();
         {{~end~}}
         for x in &data_list {
         {{~for idx in table.index_list~}}
@@ -204,20 +206,28 @@ impl {{name}} {
         }
     {{~end~}}
 
-    Ok(std::sync::Arc::new({{table.name}} { 
-            data_list,
-{{~if table.is_union_index~}}
-            data_map_union,
-{{~else if !table.index_list.empty?~}}
-    {{~for idx in table.index_list~}}
-            data_map_{{idx.index_field.name}},
+        Ok(std::sync::Arc::new({{table.name}} { 
+                data_list,
+    {{~if table.is_union_index~}}
+                data_map_union,
+    {{~else if !table.index_list.empty?~}}
+        {{~for idx in table.index_list~}}
+                data_map_{{idx.index_field.name}},
+        {{~end~}}
     {{~end~}}
-{{~end~}}
-        }))
+            }))
+    }
+
+    pub fn new(buf: &mut ByteBuf) -> Result<std::sync::Arc<{{name}}>, LubanError> {
+        let mut rows: Vec<{{value_type}}> = Vec::new();
+        for _ in 0..buf.read_size() {
+            rows.push({{value_type}}::new(buf)?);
+        }
+        Self::from_rows(rows)
     }
 
     {{~if table.is_union_index~}}
-    pub fn get<Q>(&self, key: &Q) -> Option<{{value_type}}>
+    pub fn get<Q>(&self, key: &Q) -> Option<{{value_arc}}>
     where
         ({{array.each table.index_list @index_type_name | array.join ', '}}): std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
@@ -228,7 +238,7 @@ impl {{name}} {
     {{~for idx in table.index_list
         index = format_property_name __code_style idx.index_field.name
     ~}}
-    pub fn get_by_{{index}}<Q>(&self, key: &Q) -> Option<{{value_type}}>
+    pub fn get_by_{{index}}<Q>(&self, key: &Q) -> Option<{{value_arc}}>
     where
         {{declaring_type_name idx.type}}: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
@@ -241,10 +251,18 @@ impl {{name}} {
 {{~else~}}
 
 impl {{name}} {
+    pub fn from_rows(rows: Vec<{{value_type}}>) -> Result<std::sync::Arc<{{name}}>, LubanError> {
+        if rows.len() != 1 {
+            return Err(LubanError::Table(format!("table mode=one, but size != 1")));
+        }
+        let data = rows.into_iter().next().unwrap();
+        Ok(std::sync::Arc::new({{name}} { data }))
+    }
+
     pub fn new(buf: &mut ByteBuf) -> Result<std::sync::Arc<{{name}}>, LubanError> {
         let n = buf.read_size();
         if n != 1 { return Err(LubanError::Table(format!("table mode=one, but size != 1"))); }
-        {{deserialize 'data' 'buf' table.value_ttype}}
+        let data = {{value_type}}::new(buf)?;
         Ok(std::sync::Arc::new({{name}} { data }))
     }
 }

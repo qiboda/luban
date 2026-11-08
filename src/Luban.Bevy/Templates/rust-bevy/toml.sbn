@@ -1,0 +1,8 @@
+[package]
+name = "{{__name}}"
+version = "0.1.0"
+edition = "2021"
+
+# 生成代码只依赖 atom_datatables。按生成产物实际位置调整 path。
+[dependencies]
+atom_datatables = { path = "../../crates/atom_datatables" }

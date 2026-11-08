@@ -1,0 +1,54 @@
+#![allow(missing_docs, dead_code, unused_imports, clippy::all, clippy::unwrap_used)]
+
+// 由 ATOM 的 Luban `rust-bevy` 代码目标生成。
+// 数据表类型本身由 `mod.sbn` 生成；这里补上 atom_datatables 运行时需要的接口：
+// 每张表实现 `Table`，并通过 `SPEC` 把「文件名 → 解析函数」交给 Bevy 资产管线。
+//
+// 注意：这里不要 `use atom_datatables::...`，因为 `mod.sbn` 会在同一模块里再 import 一次，
+// 重复 import 会触发 E0252。下面统一用完全限定名。
+
+pub mod prelude {
+    pub use super::*;
+{{~ for ns in __ns ~}}
+    pub use {{ns}}::*;
+{{~end~}}
+}
+
+{{~ if __polymorphic_beans.count != 0 ~}}
+compile_error!("rust-bevy 目标暂不支持多态 bean（抽象 / 继承）");
+{{~end~}}
+
+{{~ for table in __tables ~}}
+impl atom_datatables::Table for {{full_name table}} {
+    const FILE: &'static str = "{{table.output_data_file}}.bytes";
+
+    fn parse(bytes: &[u8]) -> Result<std::sync::Arc<Self>, atom_datatables::LubanError> {
+        let mut buf = atom_datatables::ByteBuf::new(bytes.to_vec());
+        {{full_name table}}::new(&mut buf)
+    }
+}
+
+{{~end~}}
+/// 本组数据表的加载描述：交给 `atom_datatables::DataTablePlugin` 即可完成
+/// 资产加载、二进制解析与注册表填充。
+pub const SPEC: atom_datatables::TableSpec = atom_datatables::TableSpec::new(
+    &[
+{{~ for table in __tables ~}}
+        {{full_name table}}::FILE,
+{{~end~}}
+    ],
+    load_all,
+);
+
+/// 把每张表的原始字节解析成表对象并写入注册表。
+///
+/// `read` 由加载管线提供：输入表文件名（含 `.bytes`），返回该文件的原始字节。
+pub fn load_all(
+    tables: &mut atom_datatables::Tables,
+    read: &mut dyn FnMut(&str) -> Result<Vec<u8>, atom_datatables::LubanError>,
+) -> Result<(), atom_datatables::LubanError> {
+{{~ for table in __tables ~}}
+    tables.insert({{full_name table}}::parse(&read({{full_name table}}::FILE)?)?);
+{{~end~}}
+    Ok(())
+}

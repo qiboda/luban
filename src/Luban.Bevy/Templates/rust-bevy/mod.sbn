@@ -13,7 +13,7 @@ use atom_datatables::{ByteBuf, LubanError, Table};
 {{~end~}}
 {{~ if enum.is_flags ~}}
 bitflags::bitflags!{    
-    #[derive(Debug, Hash, Eq, PartialEq)]
+    #[derive({{ flag_enum_derives enum }})]
     pub struct {{enum.name}} : u32 {
         {{~ for item in enum.items ~}}
     {{~if item.comment_or_alias != '' ~}}
@@ -24,7 +24,7 @@ bitflags::bitflags!{
     }
 }
 {{~else~}}
-#[derive(Debug, Hash, Eq, PartialEq, atom_datatables::serde::Deserialize)]
+#[derive({{ enum_derives enum }})]
 #[serde(crate = "atom_datatables::serde", from = "i32")]
 pub enum {{enum.name}} {
     {{~ for item in enum.items ~}}
@@ -57,7 +57,7 @@ impl From<i32> for {{enum.name}} {
 {{~ if bean.is_abstract_type || bean.parent != '' ~}}
 compile_error!("rust-bevy 目标暂不支持多态 bean（抽象 / 继承）：{{bean.name}}");
 {{~ else ~}}
-#[derive(Debug, atom_datatables::serde::Deserialize)]
+#[derive({{ bean_derives bean }})]
 #[serde(crate = "atom_datatables::serde")]
 pub struct {{bean.name}} {
     {{~ for field in hierarchy_fields ~}}
@@ -121,7 +121,7 @@ impl {{bean.name}}{
 {{~ if table.comment != '' ~}}
 ///{{table.comment | html.escape}}
 {{~end~}}
-#[derive(Debug)]
+#[derive({{ table_derives }})]
 pub struct {{table.name}} {
     {{~if table.is_map_table ~}}
     pub data_list: Vec<{{value_arc}}>,

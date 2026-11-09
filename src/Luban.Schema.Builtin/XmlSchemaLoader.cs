@@ -91,7 +91,7 @@ public class XmlSchemaLoader : SchemaLoaderBase
         }
     }
 
-    private static readonly List<string> _enumOptionalAttrs = new() { "flags", "comment", "tags", "unique", "group" };
+    private static readonly List<string> _enumOptionalAttrs = new() { "flags", "comment", "tags", "unique", "group", "derives" };
     private static readonly List<string> _enumRequiredAttrs = new() { "name" };
 
     private static readonly List<string> _enumItemOptionalAttrs = new() { "value", "alias", "comment", "tags" };
@@ -108,6 +108,7 @@ public class XmlSchemaLoader : SchemaLoaderBase
             Comment = XmlUtil.GetOptionalAttribute(e, "comment"),
             IsFlags = XmlUtil.GetOptionBoolAttribute(e, "flags"),
             Tags = DefUtil.ParseAttrs(XmlUtil.GetOptionalAttribute(e, "tags")),
+            Derives = XmlUtil.GetOptionalAttribute(e, "derives"),
             IsUniqueItemId = XmlUtil.GetOptionBoolAttribute(e, "unique", true),
             Groups = SchemaLoaderUtil.CreateGroups(XmlUtil.GetOptionalAttribute(e, "group")),
             Items = new(),
@@ -213,7 +214,7 @@ public class XmlSchemaLoader : SchemaLoaderBase
         );
     }
 
-    private static readonly List<string> _beanOptionsAttrs = new() { "parent", "valueType", "alias", "sep", "comment", "tags", "group" };
+    private static readonly List<string> _beanOptionsAttrs = new() { "parent", "valueType", "alias", "sep", "comment", "tags", "group", "derives" };
     private static readonly List<string> _beanRequireAttrs = new() { "name" };
 
     private TypeMapper CreateTypeMapper(XElement e, string fullName)
@@ -258,6 +259,7 @@ public class XmlSchemaLoader : SchemaLoaderBase
             Sep = XmlUtil.GetOptionalAttribute(e, "sep"),
             Comment = XmlUtil.GetOptionalAttribute(e, "comment"),
             Tags = DefUtil.ParseAttrs(XmlUtil.GetOptionalAttribute(e, "tags")),
+            Derives = XmlUtil.GetOptionalAttribute(e, "derives"),
             Groups = SchemaLoaderUtil.CreateGroups(XmlUtil.GetOptionalAttribute(e, "group")),
             Fields = new(),
             TypeMappers = new(),

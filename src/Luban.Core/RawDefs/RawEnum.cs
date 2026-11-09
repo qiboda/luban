@@ -53,6 +53,9 @@ public class RawEnum
 
     public Dictionary<string, string> Tags { get; set; }
 
+    /// <summary>生成代码时额外派生的 trait（逗号分隔），见 DefTypeBase.Derives。</summary>
+    public string Derives { get; set; }
+
     public List<EnumItem> Items { get; set; }
 
     public List<string> Groups { get; set; }

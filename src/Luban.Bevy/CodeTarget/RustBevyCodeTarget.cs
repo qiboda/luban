@@ -18,8 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+using Luban.Bevy.TemplateExtensions;
 using Luban.CodeTarget;
 using Luban.CSharp.CodeTarget;
+using Scriban;
+using Scriban.Runtime;
 
 namespace Luban.Bevy.CodeTarget;
 
@@ -47,5 +50,15 @@ public class RustBevyCodeTarget : RustBinCodeTarget
     {
         // rust-bevy 不生成 macros crate：生成的枚举已经带 From<i32>，
         // 运行时的表接口（Table/TableSpec/Tables）在 atom_datatables 里。
+    }
+
+    /// <summary>
+    /// 追加 rust-bevy 自己的模板函数（<see cref="RustBevyTemplateExtension"/>）：
+    /// 生成的行/枚举带哪些 derive 由项目用 <c>-x</c> 选项决定，而不是写死在模板里。
+    /// </summary>
+    protected override void OnCreateTemplateContext(TemplateContext ctx)
+    {
+        base.OnCreateTemplateContext(ctx);
+        ctx.PushGlobal(new RustBevyTemplateExtension());
     }
 }

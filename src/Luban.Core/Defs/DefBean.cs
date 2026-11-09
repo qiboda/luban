@@ -106,6 +106,7 @@ public class DefBean : DefTypeBase
         Id = TypeUtil.ComputeCfgHashIdByName(FullName);
         Comment = b.Comment;
         Tags = b.Tags;
+        Derives = b.Derives;
         foreach (var field in b.Fields)
         {
             Fields.Add(CreateField(field, 0));

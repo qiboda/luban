@@ -114,6 +114,7 @@ public class DefEnum : DefTypeBase
         IsUniqueItemId = e.IsUniqueItemId;
         Comment = e.Comment;
         Tags = e.Tags;
+        Derives = e.Derives;
         Groups = e.Groups;
         TypeMappers = e.TypeMappers is { Count: > 0 } ? e.TypeMappers : null;
         Source = e.Source;

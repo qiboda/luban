@@ -40,6 +40,9 @@ public class RawBean
 
     public Dictionary<string, string> Tags { get; set; }
 
+    /// <summary>生成代码时额外派生的 trait（逗号分隔），见 DefTypeBase.Derives。</summary>
+    public string Derives { get; set; }
+
     public string Alias { get; set; }
 
     public string Sep { get; set; }

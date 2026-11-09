@@ -50,6 +50,12 @@ public abstract class DefTypeBase
 
     public Dictionary<string, string> Tags { get; protected set; }
 
+    /// <summary>
+    /// 生成代码时额外派生的 trait（逗号分隔），由 schema 里的 <c>derives</c> 属性声明。
+    /// 只给代码模板用，不参与数据校验；为空时由代码目标自己的默认值决定。
+    /// </summary>
+    public string Derives { get; set; }
+
     public List<TypeMapper> TypeMappers { get; protected set; }
 
     public bool HasTag(string attrName)
